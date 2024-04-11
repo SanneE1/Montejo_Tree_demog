@@ -36,7 +36,7 @@ df_0515 <- dbh_xls %>%
                              !is.na(dbh_t0) & is.na(dbh_t1) ~ 0,
                              TRUE ~ NA),
          ) %>%
-  select(tree_id, year_t0, year_t1, dbh_t0, dbh_t1, surv_t1)
+  select(tree_id, year_t0, year_t1, dbh_t0, dbh_t1, surv_t1, SP, PLOT, ID)
 
 df_1521 <- dbh_xls %>%
   select(-c(dbh_2005, vig_2005)) %>%
@@ -53,7 +53,7 @@ df_1521 <- dbh_xls %>%
                              !is.na(dbh_t0) & is.na(dbh_t1) ~ 0,
                              TRUE ~ NA),
   ) %>%
-  select(tree_id, year_t0, year_t1, dbh_t0, dbh_t1, surv_t1)
+  select(tree_id, year_t0, year_t1, dbh_t0, dbh_t1, surv_t1, SP, PLOT, ID)
 
 
 dbh_df <- rbind(df_0515, df_1521) %>% 
