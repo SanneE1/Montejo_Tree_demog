@@ -57,7 +57,9 @@ df_1521 <- dbh_xls %>%
 
 
 dbh_df <- rbind(df_0515, df_1521) %>% 
-  arrange(tree_id)
+  arrange(tree_id) %>%
+  mutate(dbh_t0 = log(dbh_t0),
+         dbh_t1 = log(dbh_t1))
 
 # ---------------------------------------------------------------------------------------------
 # Survival 
@@ -77,11 +79,15 @@ pred_df <- pred_df %>%
 
 
 ggplot(pred_df) + 
-  geom_line(aes(x = dbh_t0, y = surv_annual, colour = t0), size = 2) +
-  ylab("Average annual survival rate") + xlab("DBH (cm) at first census") + 
-  scale_colour_manual(name = "Periods", 
+  geom_line(aes(x = dbh_t0, y = surv_annual, colour = t0, linetype = 'annual'), size = 1) +
+  geom_line(aes(x = dbh_t0, y = surv_predicted, colour = t0, linetype = 'total'), size = 1) +
+  ylab("Survival rates") + xlab("log(DBH) at t0") + 
+  scale_colour_manual(name = "Years", 
                       values = c("2005", "2015"),
-                      labels = c("2005-2015", "2015-2021"))+
+                      labels = c("2005-2015", "2015-2021")) +
+  scale_linetype_manual(name = "Type",
+                        values = c('solid','dashed'),
+                        labels = c("Average annual survival", "Total period survival")) +
   theme_bw()
 
 # ---------------------------------------------------------------------------------------------
