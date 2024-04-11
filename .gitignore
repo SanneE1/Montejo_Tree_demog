@@ -2,6 +2,9 @@
 data/
 documents/
 
+# Rproject
+*.Rproj
+
 # History files
 .Rhistory
 .Rapp.history
