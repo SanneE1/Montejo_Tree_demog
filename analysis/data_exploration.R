@@ -105,12 +105,16 @@ pred_df <- pred_df %>%
                                    t0 == 2015 ~ growth_predicted/6,
                                    TRUE ~ NA))
 ggplot() + 
-  geom_point(data = dbh_df, aes(x = dbh_t0, y = (dbh_t1 - dbh_t0), colour = as.character(year_t0)), alpha = 0.5) +
-  geom_line(data = pred_df, aes(x = dbh_t0, y = growth_annual, colour = t0), size = 2) +
+  geom_point(data = dbh_df, aes(x = dbh_t0, y = (dbh_t1 - dbh_t0)), alpha = 0.1) +
+  geom_line(data = pred_df, aes(x = dbh_t0, y = growth_predicted, colour = t0, linetype = "dashed"), size = 1) +
+  geom_line(data = pred_df, aes(x = dbh_t0, y = growth_annual, colour = t0, linetype = "solid"), size = 1) +
   ylab("Average annual growth (cm)") + xlab("DBH (cm) at first census") + 
   scale_colour_manual(name = "Periods", 
                       values = c("2005", "2015"),
-                      labels = c("2005-2015", "2015-2021"))+
+                      labels = c("2005-2015", "2015-2021")) +
+  scale_linetype_manual(name = "Type",
+                        values = c('solid','dashed'),
+                        labels = c("Average annual growth", "Total period growth")) +
   theme_bw()
 
 
