@@ -1,5 +1,10 @@
+library(MASS)
 library(tidyverse)
 library(lme4)
+library(caret)
+library(leaps)
+library(glmnet)
+
 
 dbh_xls <- readxl::read_xlsx("data/datos temporales.xlsx", sheet = "Diameters") %>%
   rename(ID = 'ID Tree',
@@ -13,6 +18,35 @@ dbh_xls <- readxl::read_xlsx("data/datos temporales.xlsx", sheet = "Diameters") 
   mutate(dbh_2021 = as.numeric(dbh_2021),
          tree_id = paste(Zone, PLOT, ID, SP, UBI, sep = "_"))  
 
+plot_xls <- readxl::read_xlsx("data/datos temporales.xlsx", sheet = "Env.var", skip = 1) %>%
+  rename(PLOT = `...1`,
+         slope = `Slo (%)...4`,
+         aspect = `Asp (º)`,
+         altitude = `Alt (m)`,
+         soilDepth = `Sdep (m)`,
+         orgMat = `% OM`,
+         nitrogen = `% N`,
+         orgCarbon = `% C-org`,
+         totCarbon = `% C-tot`
+         ) %>%
+  select(-c(`...12`, `Slo (%)...13`, `Slope (%)`))
+
+trait_xls <- readxl::read_xlsx("data/datos temporales.xlsx", sheet = "Traits",n_max = 17) %>%
+  select(-c(`Total individuals in FI`, "Specie")) %>%
+  mutate(across(!"Abr", as.numeric)) %>%
+  rename(SP = Abr)
+  
+
+dbh_xls <- left_join(dbh_xls, plot_xls) %>%
+  left_join(., trait_xls)
+
+
+recr_xls <- readxl::read_xlsx("data/datos temporales.xlsx", sheet = "Recruitment") %>%
+  rename(SP = Specie,
+         height_t0 = `Plant height (m)`,
+         first_yr = `Ind. 1er year    (1 = yes/0 = no)`,
+         year_t0 = `Year of measurment`)
+  
 
 
 # ---------------------------------------------------------------------------------------------
@@ -35,8 +69,8 @@ df_0515 <- dbh_xls %>%
          surv_t1 = case_when(!is.na(dbh_t0) & !is.na(dbh_t1) ~ 1,
                              !is.na(dbh_t0) & is.na(dbh_t1) ~ 0,
                              TRUE ~ NA),
-         ) %>%
-  select(tree_id, year_t0, year_t1, dbh_t0, dbh_t1, surv_t1, SP, PLOT, ID)
+         ) %>% 
+  select(-c("UBI", contains("vig"), "X", "Y"))
 
 df_1521 <- dbh_xls %>%
   select(-c(dbh_2005, vig_2005)) %>%
@@ -53,13 +87,37 @@ df_1521 <- dbh_xls %>%
                              !is.na(dbh_t0) & is.na(dbh_t1) ~ 0,
                              TRUE ~ NA),
   ) %>%
-  select(tree_id, year_t0, year_t1, dbh_t0, dbh_t1, surv_t1, SP, PLOT, ID)
+  select(-c("UBI", contains("vig"), "X", "Y"))
 
 
 dbh_df <- rbind(df_0515, df_1521) %>% 
   arrange(tree_id) %>%
   mutate(dbh_t0 = log(dbh_t0),
-         dbh_t1 = log(dbh_t1))
+         dbh_t1 = log(dbh_t1),
+         duration = year_t1 - year_t0, 
+         temp = case_when(year_t0 == 2005 ~ 0.239,
+                          year_t0 == 2015 ~ 0.648,
+                          TRUE ~ NA),
+         precip = case_when(year_t0 == 2005 ~ 0.00794,
+                            year_t0 == 2015 ~ -0.0446,
+                            TRUE ~ NA))
+
+
+# ---------------------------------------------------------------------------------------------
+# Data Stats 
+# ---------------------------------------------------------------------------------------------
+
+b <- dbh_df %>% group_by(Zone, PLOT) %>% summarize(SP = n_distinct(SP), ID = n_distinct(ID))
+a <- dbh_df %>% group_by(Zone) %>% summarize(SP = n_distinct(SP), ID = n_distinct(ID))
+
+n_distinct(dbh_df$ID)
+
+nrow(recr_xls)
+nrow(recr_xls %>% filter(first_yr == 1))
+
+recr_xls %>% group_by(SP) %>% summarise(n = n())
+
+hist(log(recr_xls$height_t0), xlab = "height (log(meter)) of new recruits", main = "")
 
 # ---------------------------------------------------------------------------------------------
 # Survival 
@@ -88,7 +146,30 @@ ggplot(pred_df) +
   scale_linetype_manual(name = "Type",
                         values = c('solid','dashed'),
                         labels = c("Average annual survival", "Total period survival")) +
-  theme_bw()
+  theme_bw() + theme(text = element_text(size = 16))
+
+# ## Cox proportional hazard rate
+# 
+# library(survival)
+# library(survminer)
+# 
+# cox_model <- coxph(Surv(time = duration, event = surv_t1) ~ dbh_t0 + year_t0, data = dbh_df)
+# 
+# summary(cox_model)
+# 
+# ggsurvplot(survfit(cox_model), data = dbh_df)
+
+
+## Stepwise regression
+surv.step.full <- stepAIC(glm(surv_t1 ~ dbh_t0 + duration + SP * Zone + PLOT + 
+                                slope + aspect + altitude + orgMat + nitrogen + orgCarbon + totCarbon + soilDepth + 
+                                LDMC + SLA + Thickness + SDMC + HubVal + RDMC + SRL + SRA + TMDr + Rdi +d13C + LC + LN + LCN + RC + RN + RCN +
+                                temp + precip, 
+                              data = dbh_df[complete.cases(dbh_df),]), 
+                          direction = "both", family = "binomial", trace = FALSE)
+summary(surv.step.full)
+
+
 
 # ---------------------------------------------------------------------------------------------
 # Growth 
@@ -115,11 +196,18 @@ ggplot() +
   scale_linetype_manual(name = "Type",
                         values = c('solid','dashed'),
                         labels = c("Average annual growth", "Total period growth")) +
-  theme_bw()
+  theme_bw() + theme(text = element_text(size = 16))
 
 
 
-
+## Stepwise regression
+grow.step.full <- stepAIC(lm(dbh_t1 ~ dbh_t0 + duration + SP * Zone + PLOT + 
+                                slope + aspect + altitude + orgMat + nitrogen + orgCarbon + totCarbon + soilDepth + 
+                                LDMC + SLA + Thickness + SDMC + HubVal + RDMC + SRL + SRA + TMDr + Rdi +d13C + LC + LN + LCN + RC + RN + RCN +
+                                temp + precip, 
+                              data = dbh_df[complete.cases(dbh_df),]), 
+                          direction = "both", trace = FALSE)
+summary(grow.step.full)
 
 
 
